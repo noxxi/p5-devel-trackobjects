@@ -301,4 +301,6 @@ last one again with C<"LEAK$PREFIX">.
 
 =back
 
- 
+=head1 COPYRIGHT
+
+Steffen Ullrich Steffen_Ullrich-at-genua-dot-de

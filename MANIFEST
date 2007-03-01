@@ -4,4 +4,5 @@ Changes
 README
 lib/Devel/TrackObjects.pm
 t/01_track.t
+COPYRIGHT
 META.yml                                 Module meta-data (added by MakeMaker)
