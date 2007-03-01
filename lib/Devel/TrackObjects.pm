@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use Scalar::Util 'weaken';
 
-our $VERSION = 0.1;
+our $VERSION = 0.2;
 
 my @weak_objects; # List of weak objects incl file + line
 my @conditions;   # which objects to track, set by import
@@ -36,7 +36,7 @@ sub import {
 			}
 		} elsif ( ! ref && m{^/} ) {
 			# assume uncompiled regex
-			my $rx = eval "qr/$_/";
+			my $rx = eval "qr$_";
 			die $@ if $@;
 			push @conditions,$rx;
 		} else {
@@ -62,7 +62,7 @@ sub END {
 sub show_tracked {
 	return $verbose 
 		? show_tracked_detailed(@_)
-		:show_tracked_compact(@_);
+		: show_tracked_compact(@_);
 }
 
 ############################################################################
@@ -216,6 +216,12 @@ At the end of the program it will print out infos about the
 still existing objects (probably leaking). The same info
 can be print out during the run using L<show_tracked>.
 
+=head1 IMPORTANT
+
+The Module must be loaded as early as possible, because it
+cannot redefine B<bless> in already loaded modules. See L<import>
+how to load it so that it redefines B<bless>.
+
 =head1 METHODS
 
 The following class methods are defined.
@@ -256,7 +262,11 @@ Will switch an internal debugging.
 =back
 
 If conditions are given it will redefine C<CORE::GLOBAL::bless>
-unless it was already redefined by this module.
+unless it was already redefined by this module. 
+
+That means you do not pay a performance penalty if you just 
+include the module, only if conditions are given it will redefine 
+B<bless>.
 
 =item show_tracked ( [ PREFIX ] )
 

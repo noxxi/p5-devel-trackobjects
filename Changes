@@ -1,2 +1,6 @@
+0.2
+  - bugfix for not compiled regex (given from cmdline)
+  - better documentation 
+
 0.1
   initial release
