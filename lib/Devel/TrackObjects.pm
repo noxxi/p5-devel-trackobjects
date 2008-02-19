@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use Scalar::Util 'weaken';
 
-our $VERSION = 0.2;
+our $VERSION = 0.3;
 
 my @weak_objects; # List of weak objects incl file + line
 my @conditions;   # which objects to track, set by import
@@ -13,8 +13,6 @@ my $old_bless;    # bless sub before redefining
 my $debug;        # enable internal debugging
 my $verbose;      # detailed output instead of compact
 my $no_end;       # no show tracked at END
-
-
 
 ############################################################################
 # redefined CORE::GLOBAL::bless if restrictions are given
@@ -34,6 +32,11 @@ sub import {
 			} else {
 				die "unknown option $1";
 			}
+		} elsif ( $_ eq 'track_object' ) {
+			# export function
+			my ($pkg) = caller();
+			no strict 'refs';
+			*{"${pkg}::track_object"} = \&track_object;
 		} elsif ( ! ref && m{^/} ) {
 			# assume uncompiled regex
 			my $rx = eval "qr$_";
@@ -79,7 +82,8 @@ sub show_tracked_detailed {
 		if ( @weak_objects ) {
 			print STDERR "LEAK$prefix >>\n";
 			foreach my $o ( @weak_objects ) {
-				printf STDERR "-- %s | %s:%s\n", "$o->[0]",$o->[1],$o->[2];
+				printf STDERR "-- %s | %s:%s%s\n", "$o->[0]",$o->[1],$o->[2],
+					defined($o->[3]) ? " $o->[3]":'';
 			}
 			print STDERR "LEAK$prefix --\n";
 		} else {
@@ -140,7 +144,14 @@ sub _bless_and_track($;$) {
 	_register( $object,$filename,$line ) if $track;
 
 	return $object;
-};
+}
+
+############################################################################
+sub track_object {
+	my ($object,$info) = @_;
+	my (undef,$filename,$line) = caller();
+	_register( $object,$filename,$line,$info );
+}
 
 ############################################################################
 # redefine bless unless it's already redefined
@@ -163,9 +174,9 @@ sub _redefine_bless {
 # register object, called from _bless_and_track
 ############################################################################
 sub _register {
-	my ($ref,$fname,$line) = @_;
+	my ($ref,$fname,$line,$info) = @_;
 	warn "TrackObjects: register @_\n" if $debug;
-	push @weak_objects, [ $ref,$fname,$line ];
+	push @weak_objects, [ $ref,$fname,$line,$info ];
 	weaken( $weak_objects[-1][0] );
 }
 
@@ -196,10 +207,13 @@ Devel::TrackObjects - Track use of objects
 =item inside
 
  use Devel::TrackObjects qr/^IO::/;
- use Devel::TrackObjects '-verbose';
+ use Devel::TrackObjects '-verbose','track_object';
  use IO::Socket;
  ...
  my $sock = IO::Socket::INET->new...
+ ...
+ my $foreign = get_some_object_from_xs();
+ track_object( $foreign, "This was created in XS" );
  ...
  Devel::TrackObjects->show_tracked;
 
@@ -267,6 +281,16 @@ unless it was already redefined by this module.
 That means you do not pay a performance penalty if you just 
 include the module, only if conditions are given it will redefine 
 B<bless>.
+
+=item track_object( OBJECT, [ INFO ] )
+
+This tracks the given OBJECT manually.
+This can be used in cases, where one only wants to track single objects
+and not all objects for a given class or if the object was created outside
+of perl and thus could not be tracked automatically.
+
+If an additional INFO string is given it will be saved and shown from
+B<show_tracked>.
 
 =item show_tracked ( [ PREFIX ] )
 

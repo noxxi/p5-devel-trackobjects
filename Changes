@@ -1,3 +1,9 @@
+0.3
+  - new function track_object, which can be used to track objects
+    manually for cases where not all objects of a class should be
+    tracked or if the object were created outside of perl
+  - verify in Makefile.PL, that the weaken from Scalar::Util is
+    usable (was not supported in old perl versions)
 0.2
   - bugfix for not compiled regex (given from cmdline)
   - better documentation 
