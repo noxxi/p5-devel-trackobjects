@@ -12,7 +12,11 @@ my $old_bless;    # bless sub before redefining
 
 my $debug;        # enable internal debugging
 my $verbose;      # detailed output instead of compact
+my $with_tstamp;  # prefix output with timestamp
+my $with_size;    # with size of objects
+my $with_sizediff; # track changes in size
 my $no_end;       # no show tracked at END
+
 
 ############################################################################
 # redefined CORE::GLOBAL::bless if restrictions are given
@@ -20,18 +24,11 @@ my $no_end;       # no show tracked at END
 ############################################################################
 sub import {
 	shift;
+	my @opt;
 	while (@_) {
 		local $_ = shift;
 		if ( ! ref && m{^-(\w+)$} ) {
-			if ( $1 eq 'debug' ) {
-				$debug = 1;
-			} elsif ( $1 eq 'verbose' ) {
-				$verbose = 1;
-			} elsif ( $1 eq 'noend' ) {
-				$no_end = 1;
-			} else {
-				die "unknown option $1";
-			}
+			push @opt,$1;
 		} elsif ( $_ eq 'track_object' ) {
 			# export function
 			my ($pkg) = caller();
@@ -44,6 +41,26 @@ sub import {
 			push @conditions,$rx;
 		} else {
 			push @conditions,$_
+		}
+	}
+	for(@opt) {
+		if ( $_ eq 'debug' ) {
+			$debug = 1;
+		} elsif ( $_ eq 'verbose' ) {
+			$verbose = 1;
+		} elsif ( $_ eq 'timestamp' ) {
+			$with_tstamp = 1;
+		} elsif ( $_ eq 'noend' ) {
+			$no_end = 1;
+		} elsif ( $_ eq 'size' ) {
+			# need Devel::Size;
+			$with_size = eval { require Devel::Size }
+				or die "need Devel::Size installed for '-size' option"
+		} elsif ( $_ eq 'sizediff' ) {
+			$with_sizediff = 1;
+			push @opt,'size' if ! $with_size;
+		} else {
+			die "unknown option $_";
 		}
 	}
 	_redefine_bless() if @conditions;
@@ -63,13 +80,13 @@ sub END {
 # depending on $verbose show detailed or compact version
 ############################################################################
 sub show_tracked {
-	return $verbose 
+	return $verbose
 		? show_tracked_detailed(@_)
 		: show_tracked_compact(@_);
 }
 
 ############################################################################
-# show what's still used. If I want something back give reference to 
+# show what's still used. If I want something back give reference to
 # \@weak_objects, else print myself to STDERR
 ############################################################################
 sub show_tracked_detailed {
@@ -80,14 +97,35 @@ sub show_tracked_detailed {
 		return \@weak_objects;
 	} else {
 		if ( @weak_objects ) {
-			print STDERR "LEAK$prefix >>\n";
-			foreach my $o ( @weak_objects ) {
-				printf STDERR "-- %s | %s:%s%s\n", "$o->[0]",$o->[1],$o->[2],
+			my (%s,%l);
+			print STDERR "LEAK$prefix "
+				. ($with_tstamp ? localtime().' ' :'' ) . " >> \n";
+			for my $o ( sort { $a->[0] cmp $b->[0] } @weak_objects ) {
+				my $line = '-- ';
+				if ( $with_size ) {
+					my $size = Devel::Size::size($o->[0]);
+					my $total_size = Devel::Size::total_size($o->[0]);
+					if ( $with_sizediff ) {
+						$line .= sprintf("size=%d/%+d/%+d ",$size,
+							$size-($o->[6]||0),$size-($o->[4]||0));
+						$line .= sprintf("%d/%+d/%+d ", $total_size,
+							$total_size-($o->[7]||0),$total_size-($o->[5]||0));
+						$o->[4] = $size if ! defined $o->[4];
+						$o->[5] = $total_size if ! defined $o->[5];
+						$o->[6] = $size;
+						$o->[7] = $total_size;
+					} else {
+						$line .= "size=$size total=$total_size ";
+					}
+				}
+				$line .= sprintf "%s | %s:%s%s\n", "$o->[0]",$o->[1],$o->[2],
 					defined($o->[3]) ? " $o->[3]":'';
+				print STDERR $line;
 			}
 			print STDERR "LEAK$prefix --\n";
 		} else {
-			print STDERR "LEAK$prefix >> empty --\n";
+			print STDERR "LEAK$prefix "
+				. ($with_tstamp ? localtime().' ' :'' ) . " >> empty --\n";
 		}
 	}
 }
@@ -165,6 +203,7 @@ sub _redefine_bless {
 	$old_bless = undef if $@;
 
 	# redefine 'bless'
+	no warnings 'once';
 	*CORE::GLOBAL::bless = \&_bless_and_track;
 	$is_redefined = 1;
 }
@@ -176,6 +215,14 @@ sub _redefine_bless {
 sub _register {
 	my ($ref,$fname,$line,$info) = @_;
 	warn "TrackObjects: register @_\n" if $debug;
+	#0: referenz
+	#1: file name
+	#2: line in file
+	#3: info message
+	#4: initial size
+	#5: initial total_size
+	#6: last size
+	#7: last total_size
 	push @weak_objects, [ $ref,$fname,$line,$info ];
 	weaken( $weak_objects[-1][0] );
 }
@@ -192,7 +239,7 @@ sub _remove_destroyed {
 
 __END__
 
-=head1 NAME 
+=head1 NAME
 
 Devel::TrackObjects - Track use of objects
 
@@ -208,6 +255,7 @@ Devel::TrackObjects - Track use of objects
 
  use Devel::TrackObjects qr/^IO::/;
  use Devel::TrackObjects '-verbose','track_object';
+ use Devel::TrackObjects '-size','-sizediff','-timestamp';
  use IO::Socket;
  ...
  my $sock = IO::Socket::INET->new...
@@ -240,14 +288,14 @@ how to load it so that it redefines B<bless>.
 
 The following class methods are defined.
 
-=over 4 
+=over 4
 
 =item import ( COND|OPTIONS )
 
 Called from B<use>.
 
-COND is a list of conditions. A condition is either a regex used 
-as a match for a classname, a string used to match the class with 
+COND is a list of conditions. A condition is either a regex used
+as a match for a classname, a string used to match the class with
 exactly this name or a reference to a subroutine, which gets called
 to decide if the class should get tracked (must return TRUE).
 
@@ -265,6 +313,19 @@ as an option. Valid options are:
 Output from L<show_tracked> will be more verbose, e.g it will use
 L<show_tracked_detailed> instead of L<show_tracked_compact>.
 
+=item -timestamp
+
+Includes timestamp in messages.
+
+=item -size
+
+Includes size of objects in detailed output.
+Needs Devel::Size installed.
+
+=item -sizediff
+
+Includes size and difference in size to last output and first output.
+
 =item -noend
 
 Don't show remaining tracked objects at B<END>.
@@ -276,10 +337,10 @@ Will switch an internal debugging.
 =back
 
 If conditions are given it will redefine C<CORE::GLOBAL::bless>
-unless it was already redefined by this module. 
+unless it was already redefined by this module.
 
-That means you do not pay a performance penalty if you just 
-include the module, only if conditions are given it will redefine 
+That means you do not pay a performance penalty if you just
+include the module, only if conditions are given it will redefine
 B<bless>.
 
 =item track_object( OBJECT, [ INFO ] )
@@ -297,7 +358,7 @@ B<show_tracked>.
 If B<-verbose> was set in L<import> it will call L<show_tracked_detailed>,
 otherwise L<show_tracked_compact>.
 
-This method will be called at B<END> unless B<-noend> was specified 
+This method will be called at B<END> unless B<-noend> was specified
 in L<import>.
 
 =item show_tracked_compact ( [ PREFIX ] )
@@ -307,21 +368,26 @@ the current object count for the class.
 
 If the caller wants to get something in return it will
 return a reference to this hash, otherwise it will print
-out the information in a single line to STDERR starting 
+out the information in a single line to STDERR starting
 with C<"LEAK$PREFIX">.
 
 =item show_tracked_detailed ( [ PREFIX ] )
 
-If the caller wants something in return it will give
-it a reference to an array containing array-refs with
-C<< [ REF,FILE,LINE ] >>, where REF is the weak reference
-to the object, FILE and LINE the file name and line number,
+If the caller wants something in return it will give it a reference to an
+array containing array-refs with C<< [ REF,FILE,LINE ] >>, where REF is the
+weak reference to the object, FILE and LINE the file name and line number,
 where the object was blessed.
 
-If the calling context is void it will print these
-information to STDERR. The first line will start with
-C<"LEAK$PREFIX">, the next ones with "--" and the
-last one again with C<"LEAK$PREFIX">.
+If the calling context is void it will print these information to STDERR.
+The first line will start with C<"LEAK$PREFIX"> and the last one ends with
+C<"LEAK$PREFIX">.
+Each line in between has the information about one object, including the
+stringification of REF, FILE and LINE of creation.
+
+If option C<-size> was given it will include the size and total_size of the
+object (see L<Devel::Size> for meaning of C<size> and C<total_size>).
+If option C<-sizediff> was given it will also add the difference of size
+between the last call and the first call.
 
 =back
 

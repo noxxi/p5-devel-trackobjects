@@ -1,12 +1,17 @@
+0.4 2010/11/01
+- new options -timestamp,-size,-sizediff to get timestamps and
+  information about sizes and size changes in objects using
+  Devel::Size. Thanks to DetlefPilzecker[AT]web[DOT]de for
+  ideas and initial patch
 0.3
-  - new function track_object, which can be used to track objects
-    manually for cases where not all objects of a class should be
-    tracked or if the object were created outside of perl
-  - verify in Makefile.PL, that the weaken from Scalar::Util is
-    usable (was not supported in old perl versions)
+- new function track_object, which can be used to track objects
+  manually for cases where not all objects of a class should be
+  tracked or if the object were created outside of perl
+- verify in Makefile.PL, that the weaken from Scalar::Util is
+  usable (was not supported in old perl versions)
 0.2
-  - bugfix for not compiled regex (given from cmdline)
-  - better documentation 
+- bugfix for not compiled regex (given from cmdline)
+- better documentation 
 
 0.1
-  initial release
+- initial release
