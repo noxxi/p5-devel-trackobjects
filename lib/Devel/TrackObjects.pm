@@ -3,7 +3,7 @@ use strict;
 use warnings;
 use Scalar::Util 'weaken';
 
-our $VERSION = 0.3;
+our $VERSION = 0.4;
 
 my @weak_objects; # List of weak objects incl file + line
 my @conditions;   # which objects to track, set by import
