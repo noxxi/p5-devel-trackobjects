@@ -1,3 +1,7 @@
+0.5 2012/02/15
+- use overload::StrVal when printing out references to the object
+  to work around overloaded stringification which can have unwanted
+  side effects
 0.4 2010/11/01
 - new options -timestamp,-size,-sizediff to get timestamps and
   information about sizes and size changes in objects using

@@ -2,8 +2,9 @@ package Devel::TrackObjects;
 use strict;
 use warnings;
 use Scalar::Util 'weaken';
+use overload;
 
-our $VERSION = 0.4;
+our $VERSION = 0.5;
 
 my @weak_objects; # List of weak objects incl file + line
 my @conditions;   # which objects to track, set by import
@@ -100,7 +101,9 @@ sub show_tracked_detailed {
 			my (%s,%l);
 			print STDERR "LEAK$prefix "
 				. ($with_tstamp ? localtime().' ' :'' ) . " >> \n";
-			for my $o ( sort { $a->[0] cmp $b->[0] } @weak_objects ) {
+			for my $o ( sort { 
+				overload::StrVal($a->[0]) cmp overload::StrVal($b->[0]) 
+				} @weak_objects ) {
 				my $line = '-- ';
 				if ( $with_size ) {
 					my $size = Devel::Size::size($o->[0]);
@@ -118,7 +121,8 @@ sub show_tracked_detailed {
 						$line .= "size=$size total=$total_size ";
 					}
 				}
-				$line .= sprintf "%s | %s:%s%s\n", "$o->[0]",$o->[1],$o->[2],
+				$line .= sprintf "%s | %s:%s%s\n", 
+					overload::StrVal($o->[0]),$o->[1],$o->[2],
 					defined($o->[3]) ? " $o->[3]":'';
 				print STDERR $line;
 			}
@@ -214,7 +218,9 @@ sub _redefine_bless {
 ############################################################################
 sub _register {
 	my ($ref,$fname,$line,$info) = @_;
-	warn "TrackObjects: register @_\n" if $debug;
+	warn "TrackObjects: register ".overload::StrVal($ref).
+		" $fname:$line ".(defined($info) ? $info:'' )."\n" 
+		if $debug;
 	#0: referenz
 	#1: file name
 	#2: line in file
@@ -270,7 +276,7 @@ Devel::TrackObjects - Track use of objects
 =head1 DESCRIPTION
 
 Devel::TrackObjects redefines C<bless> and thus tracks
-the creation of objectsi by putting weak references to the
+the creation of objects by putting weak references to the
 object into a list. It can be specified which classes
 to track.
 
