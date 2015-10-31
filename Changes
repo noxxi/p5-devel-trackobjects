@@ -1,3 +1,6 @@
+0.600 2015/10/31
+- detect if object gets re-blessed and unregister the previous incarnation
+  before registering the new one
 0.5 2012/02/15
 - use overload::StrVal when printing out references to the object
   to work around overloaded stringification which can have unwanted

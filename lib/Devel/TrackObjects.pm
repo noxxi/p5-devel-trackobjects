@@ -4,7 +4,7 @@ use warnings;
 use Scalar::Util 'weaken';
 use overload;
 
-our $VERSION = 0.5;
+our $VERSION = '0.600';
 
 my @weak_objects; # List of weak objects incl file + line
 my @conditions;   # which objects to track, set by import
@@ -167,6 +167,11 @@ sub show_tracked_compact {
 sub _bless_and_track($;$) {
 	my ($pkg,$filename,$line) = caller();
 	my $class = $_[1] || $pkg;
+
+	if (ref($_[0])) {
+	    # unregister
+	    @weak_objects = grep { $_->[0] && $_->[0] != $_[0] } @weak_objects;
+	}
 	my $object = $old_bless ? $old_bless->( $_[0],$class) : CORE::bless( $_[0],$class );
 
 	my $track = 0;
